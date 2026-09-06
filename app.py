@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 from google import genai
 
 # 1. Page Configuration
@@ -6,15 +7,17 @@ st.set_page_config(page_title="DSA Bot: Divide & Conquer", page_icon="🧠", lay
 st.title("🧠 Divide & Conquer Chatbot")
 st.caption("Master recursion, Merge Sort, Quick Sort, and Binary Search with relatable examples.")
 
-# 2. API Key Setup
-if "GEMINI_API_KEY" not in st.secrets:
-    st.error("Please add your GEMINI_API_KEY to `.streamlit/secrets.toml`")
-    st.stop()
+# 2. API Key Setup (Updated for Render)
+# Check OS environment variables first (Render), then fallback to Streamlit secrets (Local)
+api_key = os.environ.get("GEMINI_API_KEY")
+if not api_key:
+    try:
+        api_key = st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        st.error("Please add your GEMINI_API_KEY to Render Environment Variables or `.streamlit/secrets.toml`")
+        st.stop()
 
-# Initialize the new genai client
-client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-
-# 3. Model Configuration
+# 3. Model Configuration & Connection Management
 system_instruction = (
     "You are an expert Data Structures and Algorithms instructor. "
     "Your focus is exclusively on the 'Divide and Conquer' paradigm. "
@@ -28,15 +31,18 @@ system_instruction = (
 
 @st.cache_resource
 def get_chat_session():
-    # Updated to gemini-3.6-flash and removed the deprecated temperature parameter
-    return client.chats.create(
+    # Pass the extracted api_key here
+    client = genai.Client(api_key=api_key)
+    
+    chat = client.chats.create(
         model="gemini-3.6-flash",
         config={
             "system_instruction": system_instruction
         }
     )
+    return client, chat
 
-chat = get_chat_session()
+client, chat = get_chat_session()
 
 # 4. Initialize Chat History in Streamlit UI
 if "messages" not in st.session_state:
@@ -60,7 +66,6 @@ if prompt := st.chat_input("Ask about an algorithm (e.g., Merge Sort)..."):
         full_response = ""
         
         try:
-            # send_message_stream is the updated streaming method
             response = chat.send_message_stream(prompt)
             for chunk in response:
                 full_response += chunk.text
